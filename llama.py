@@ -41,8 +41,9 @@ class LayerNorm(torch.nn.Module):
         Returns:
             torch.Tensor: The normalized tensor.
         """
-        # todo
-        raise NotImplementedError
+        mean = x.mean(dim=-1, keepdim=True)
+        std = x.std(dim=-1, keepdim=True)
+        return (x - mean) / (std + self.eps)
 
     def forward(self, x):
         """
@@ -105,8 +106,16 @@ class Attention(nn.Module):
         An optimal implementation will compute attention for all heads
         jointly using matrix/tensor operations.
         '''
-        # todo
-        raise NotImplementedError
+        bs, n_local_heads, seqlen, head_dim = query.shape
+        score = torch.matmul(query, key.transpose(-2, -1))/math.sqrt(head_dim)
+        if self.causal:
+            # Corrected code
+            mask = self.causal_mask[:seqlen, :seqlen]
+            score = score.masked_fill(mask == 0, float("-inf"))
+        score = self.attn_dropout(score)
+        score = F.softmax(score, dim=-1)
+        score = torch.matmul(score, value)
+        return score
 
 
     def forward(
@@ -210,8 +219,12 @@ class LlamaLayer(nn.Module):
         5) add a residual connection from the unnormalized self-attention output to the
            output of the feed-forward network
         '''
-        # todo
-        raise NotImplementedError
+        x = self.attention_norm(x)
+        h = self.attention(x) + x
+        x = self.ffn_norm(h)
+        x = self.feed_forward(x)
+        x = h + x
+        return x
 
 class Llama(LlamaPreTrainedModel):
     def __init__(self, config: LlamaConfig):
@@ -280,6 +293,7 @@ class Llama(LlamaPreTrainedModel):
         of operation for this. Also note this is a super inefficient version of sampling 
         with no key/value cache, but you are free to add any optimizations on top of this.
         """
+        self.eval()
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = idx if idx.size(1) <= self.params.max_seq_len else idx[:, -self.params.max_seq_len:]
@@ -301,14 +315,15 @@ class Llama(LlamaPreTrainedModel):
                 6) Renormalize the remaining probabilities so they sum to 1.
                 7) Sample from this filtered probability distribution.
                 '''
-                # todo 
-
-                raise NotImplementedError
-                # map to original vocab indices
-                idx_next = None
-            
-            # append sampled index to the running sequence and continue
-            idx = torch.cat((idx, idx_next), dim=1)
+                probs = F.softmax(logits / temperature, dim=-1)
+                sorted_probs, sorted_indices = torch.sort(probs, descending=True, dim=-1)
+                cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+                sorted_indices_to_remove = cumulative_probs > top_p
+                sorted_probs = sorted_probs.masked_fill(sorted_indices_to_remove, 0.0)
+                sorted_probs = sorted_probs / sorted_probs.sum(dim=-1, keepdim=True)
+                idx_next = torch.multinomial(sorted_probs, num_samples=1)
+                idx_next = torch.gather(sorted_indices, -1, idx_next)
+                idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
 
