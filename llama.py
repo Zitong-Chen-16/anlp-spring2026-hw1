@@ -42,7 +42,7 @@ class LayerNorm(torch.nn.Module):
             torch.Tensor: The normalized tensor.
         """
         mean = x.mean(dim=-1, keepdim=True)
-        std = x.std(dim=-1, keepdim=True)
+        std = x.std(dim=-1, keepdim=True, unbiased=False)
         return (x - mean) / (std + self.eps)
 
     def forward(self, x):
@@ -109,11 +109,10 @@ class Attention(nn.Module):
         bs, n_local_heads, seqlen, head_dim = query.shape
         score = torch.matmul(query, key.transpose(-2, -1))/math.sqrt(head_dim)
         if self.causal:
-            # Corrected code
             mask = self.causal_mask[:seqlen, :seqlen]
             score = score.masked_fill(mask == 0, float("-inf"))
-        score = self.attn_dropout(score)
         score = F.softmax(score, dim=-1)
+        score = self.attn_dropout(score)
         score = torch.matmul(score, value)
         return score
 
@@ -219,8 +218,9 @@ class LlamaLayer(nn.Module):
         5) add a residual connection from the unnormalized self-attention output to the
            output of the feed-forward network
         '''
+        x0 = x
         x = self.attention_norm(x)
-        h = self.attention(x) + x
+        h = self.attention(x) + x0
         x = self.ffn_norm(h)
         x = self.feed_forward(x)
         x = h + x
@@ -294,35 +294,40 @@ class Llama(LlamaPreTrainedModel):
         with no key/value cache, but you are free to add any optimizations on top of this.
         """
         self.eval()
-        for _ in range(max_new_tokens):
-            # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = idx if idx.size(1) <= self.params.max_seq_len else idx[:, -self.params.max_seq_len:]
-            # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
-            logits = logits[:, -1, :] # crop to just the final time step
-            
-            if temperature == 0.0:
-                # select the single most likely index
-                idx_next = torch.argmax(logits, dim=-1, keepdim=True)
-            else:
-                '''
-                Perform temperature sampling with top-p sampling:
-                1) Scale the logits with the temperature followed by normalization using Softmax.
-                2) Sort tokens by descending probability.
-                3) Compute the cumulative probability distribution.
-                4) Select the smallest set of tokens whose cumulative probability is >= p.
-                5) Mask out all tokens outside this nucleus.
-                6) Renormalize the remaining probabilities so they sum to 1.
-                7) Sample from this filtered probability distribution.
-                '''
-                probs = F.softmax(logits / temperature, dim=-1)
-                sorted_probs, sorted_indices = torch.sort(probs, descending=True, dim=-1)
-                cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
-                sorted_indices_to_remove = cumulative_probs > top_p
-                sorted_probs = sorted_probs.masked_fill(sorted_indices_to_remove, 0.0)
-                sorted_probs = sorted_probs / sorted_probs.sum(dim=-1, keepdim=True)
-                idx_next = torch.multinomial(sorted_probs, num_samples=1)
-                idx_next = torch.gather(sorted_indices, -1, idx_next)
+        with torch.no_grad():
+            for _ in range(max_new_tokens):
+                # if the sequence context is growing too long we must crop it at block_size
+                idx_cond = idx if idx.size(1) <= self.params.max_seq_len else idx[:, -self.params.max_seq_len:]
+                # forward the model to get the logits for the index in the sequence
+                logits, _ = self(idx_cond)
+                logits = logits[:, -1, :] # crop to just the final time step
+                
+                if temperature == 0.0:
+                    # select the single most likely index
+                    idx_next = torch.argmax(logits, dim=-1, keepdim=True)
+                else:
+                    '''
+                    Perform temperature sampling with top-p sampling:
+                    1) Scale the logits with the temperature followed by normalization using Softmax.
+                    2) Sort tokens by descending probability.
+                    3) Compute the cumulative probability distribution.
+                    4) Select the smallest set of tokens whose cumulative probability is >= p.
+                    5) Mask out all tokens outside this nucleus.
+                    6) Renormalize the remaining probabilities so they sum to 1.
+                    7) Sample from this filtered probability distribution.
+                    '''
+                    probs = F.softmax(logits / temperature, dim=-1)
+                    sorted_probs, sorted_indices = torch.sort(probs, descending=True, dim=-1)
+                    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+                    remove_idx = cumulative_probs > top_p
+                    remove_idx[..., 1:] = remove_idx[..., :-1].clone()
+                    remove_idx[..., 0] = False
+                    sorted_probs = sorted_probs.masked_fill(remove_idx, 0.0)
+                    C = sorted_probs.sum(dim=-1, keepdim=True)
+                    sorted_probs = sorted_probs / C
+                    sampled_pos = torch.multinomial(sorted_probs, num_samples=1)
+                    idx_next = torch.gather(sorted_indices, -1, sampled_pos)
+
                 idx = torch.cat((idx, idx_next), dim=1)
 
         return idx

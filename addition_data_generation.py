@@ -14,11 +14,17 @@ def generate_addition_data(n):
     4) Repeat until n unique examples are collected
     5) Return the data formatted as strings of the form "a+b=c"
     """
-    # todo
-    # data = []
-    # ....
-    # return data
-    raise NotImplementedError
+
+    data = []
+    while len(data) < n:
+        # Randomly sample two 4-digit integers a and b
+        a = random.randint(1000, 9999)
+        b = random.randint(1000, 9999)
+        c = a + b
+        # Ensure uniqueness of addition pairs
+        if (a, b) not in data and (b, a) not in data:
+            data.append((a, b, c))
+    return [f"{a}+{b}={c}" for a, b, c in data]
 
 def generate_dataset(n, filename, save_dir="data"):
     data = generate_addition_data(n)

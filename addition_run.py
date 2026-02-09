@@ -63,16 +63,39 @@ def train_one_epoch(model, loader, optimizer, device):
     Another Hint: 
         token id for "=" is 12. 
     """
-    # # todo
-    # model.train()
-    # total_loss = 0
-    # n_batches = 0
-    # for ...
+    # todo
+    model.train()
+    total_loss = 0
+    n_batches = 0
+    
+    for batch in tqdm(loader, desc="Training"):
+        batch = batch.to(device)
+        optimizer.zero_grad()
 
-    # return total_loss / n_batches
+        # Forward pass
+        input_tokens = batch[:, :-1]  # Input tokens except the last one
+        logits, _ = model(input_tokens)  # Input tokens except the last one
+        target_tokens = batch[:, 1:]       # Target tokens shifted by one
 
-    raise NotImplementedError
+        # Mask the loss before the equal sign 
+        eq_mask = (input_tokens == 12).cumsum(dim=1) > 0
+        eq_mask = eq_mask[:, :-1].view(-1)
 
+        # Compute loss
+        loss = F.cross_entropy(
+            logits.view(-1, logits.size(-1))[eq_mask], 
+            target_tokens.view(-1)[eq_mask], 
+            ignore_index=0  # Assuming 0 is the padding token
+        )
+
+        # Backpropagation and optimization step
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+        n_batches += 1
+
+    return total_loss / n_batches
 
 @torch.no_grad()
 def evaluate_loss(model, loader, device):
@@ -95,15 +118,33 @@ def evaluate_loss(model, loader, device):
     Another Hint: 
         token id for "=" is 12. 
     """
-    # todo
-    # model.eval()
-    # total_loss = 0
-    # n_batches = 0
-    # for ...
+    model.eval()
+    total_loss = 0
+    n_batches = 0
+    for batch in tqdm(loader, desc="Evaluating"):
+        batch = batch.to(device)
+        input_tokens = batch[:, :-1]  # Input tokens except the last one
+        target_tokens = batch[:, 1:]       # Target tokens shifted by one
 
-    # return total_loss / n_batches
+        # Mask the loss before the equal sign 
+        eq_mask = (input_tokens == 12).cumsum(dim=1) > 0
+        eq_mask = eq_mask[:, :-1].view(-1)
 
-    raise NotImplementedError
+        # Forward pass
+        logits, _ = model(input_tokens)
+        
+        # Compute loss
+        loss = F.cross_entropy(
+            logits.view(-1, logits.size(-1))[eq_mask], 
+            target_tokens.view(-1)[eq_mask], 
+            ignore_index=0  # Assuming 0 is the padding token
+        )
+
+        total_loss += loss.item()
+        n_batches += 1
+
+    return total_loss / n_batches
+
 
 
 
