@@ -72,10 +72,10 @@ class AdamW(Optimizer):
                 else:
                     m_hat = state['m']
                     v_hat = state['v']
-                # TODO: Update parameters
+                # Update parameters
                 update = m_hat / (torch.sqrt(v_hat) + eps)
                 p.data -= update * alpha
-                # TODO: Add weight decay after the main gradient-based updates.
+                # Add weight decay after the main gradient-based updates.
                 # Please note that the learning rate should be incorporated into this update.
                 p.data -= weight_decay * alpha * p.data
 
