@@ -18,7 +18,7 @@ In this assignment, you will implement important components of the Llama2 model 
 
 You are responsible for implementing core components of Llama2 in the following files:
 - `llama.py` - Main model architecture
-- `classifier.py` - Classification head
+<!--- `classifier.py` - Classification head-->
 - `optimizer.py` - AdamW optimizer  
 - `rope.py` - Rotary position embeddings
 
@@ -116,7 +116,6 @@ ANDREWID/
 ├── base_llama.py
 ├── llama.py
 ├── rope.py
-├── classifier.py
 ├── config.py
 ├── optimizer.py
 ├── sanity_check.py
@@ -151,7 +150,7 @@ ANDREWID/
 
 * **A+**: (Tiniest Addition LLaMA) The A+ grade is reserved for the top 5% of students who explore the boundaries of training and demonstrate a strong understanding of model capacity through systematic experimentation. You must perform multiple ablation studies and use them to identify the tiniest LLaMA architecture that achieves 100% accuracy on the test set, while remaining within the specified model capacity constraint. You are required to submit at least 5 different ablations, as well as your best-performing (smallest) model, with each experiment saved in a separate directory as instructed. Ensure that all experiments are executable using the provided commands. You must plot the results of all experiments and save training logs for each run. Submissions that do not include the required ablations, plots, and logs will not be eligible for an A+.
 
-* **A**: You correctly implement all required components in: `llama.py`, `classifier.py`, `optimizer.py`, `rope.py`, `addition_data_generation.py` and `addition_run.py`. Your implementation passes the provided sanity checks and produces: Coherent, grammatical text generation Correct execution of zero-shot prompting on SST-5 and CFIMDB A working addition LLaMA that successfully trains, evaluates, and achieves 100% accuracy on the test set. 
+* **A**: You correctly implement all required components in: `llama.py`, <!--`classifier.py`-->, `optimizer.py`, `rope.py`, `addition_data_generation.py` and `addition_run.py`. Your implementation passes the provided sanity checks and produces: Coherent, grammatical text generation Correct execution of zero-shot prompting on SST-5 and CFIMDB A working addition LLaMA that successfully trains, evaluates, and achieves 100% accuracy on the test set. 
 
 * **A-**: All required components are implemented and executable, but one or more of the following issues occur: Generated text is not coherent or not grammatically well-formed Zero-shot prompting or addition training runs but produces clearly incorrect or unstable results. The model fails to meaningfully learn the addition task. The pipeline runs end-to-end, but outputs do not meet expected qualitative or quantitative behavior.
 
