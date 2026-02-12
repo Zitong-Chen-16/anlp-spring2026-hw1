@@ -1,6 +1,7 @@
 # Generate a dataset of addition problems
 import random
 import os
+from tqdm import tqdm 
 
 def generate_addition_data(n):
     """
@@ -15,16 +16,39 @@ def generate_addition_data(n):
     5) Return the data formatted as strings of the form "a+b=c"
     """
 
-    data = []
-    while len(data) < n:
-        # Randomly sample two 4-digit integers a and b
-        a = random.randint(1000, 9999)
-        b = random.randint(1000, 9999)
-        c = a + b
-        # Ensure uniqueness of addition pairs
-        if (a, b) not in data and (b, a) not in data:
-            data.append((a, b, c))
-    return [f"{a}+{b}={c}" for a, b, c in data]
+    # data = []
+    # pbar = tqdm(total=n, desc="Generating addition data", unit="examples")
+    # try:
+    #     while len(data) < n:
+    #         # Randomly sample two 4-digit integers a and b
+    #         a = random.randint(1000, 9999)
+    #         b = random.randint(1000, 9999)
+    #         c = a + b
+    #         # Ensure uniqueness of addition pairs
+    #         if (a, b, c) not in data and (b, a, c) not in data:
+    #             data.append((a, b, c))
+    #             pbar.update(1)
+    # finally:
+    #     pbar.close()
+    # return [f"{a}+{b}={c}" for a, b, c in data]
+
+    seen = set()          
+    out = []
+    pbar = tqdm(total=n, desc="Generating addition data", unit="examples")
+    try:
+        while len(out) < n:
+            a = random.randint(1000, 9999)
+            b = random.randint(1000, 9999)
+            x, y = (a, b) if a <= b else (b, a)
+            if (x, y) in seen:
+                continue
+            seen.add((x, y))
+            c = a + b
+            out.append(f"{a}+{b}={c}")
+            pbar.update(1)
+    finally:
+        pbar.close()
+    return out
 
 def generate_dataset(n, filename, save_dir="data"):
     data = generate_addition_data(n)

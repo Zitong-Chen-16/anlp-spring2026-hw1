@@ -63,32 +63,51 @@ def train_one_epoch(model, loader, optimizer, device):
     Another Hint: 
         token id for "=" is 12. 
     """
-    # todo
     model.train()
     total_loss = 0
     n_batches = 0
     
     for batch in tqdm(loader, desc="Training"):
-        batch = batch.to(device)
-        optimizer.zero_grad()
-
+        input_tokens = batch[0].to(device)
+        target_tokens = batch[1].to(device)
+        optimizer.zero_grad(set_to_none=True)
+        
         # Forward pass
-        input_tokens = batch[:, :-1]  # Input tokens except the last one
-        logits, _ = model(input_tokens)  # Input tokens except the last one
-        target_tokens = batch[:, 1:]       # Target tokens shifted by one
-
+        logits, _ = model(input_tokens)
         # Mask the loss before the equal sign 
         eq_mask = (input_tokens == 12).cumsum(dim=1) > 0
-        eq_mask = eq_mask[:, :-1].view(-1)
+        eq_mask &= (target_tokens != -1) # ignore padding
 
-        # Compute loss
-        loss = F.cross_entropy(
-            logits.view(-1, logits.size(-1))[eq_mask], 
-            target_tokens.view(-1)[eq_mask], 
-            ignore_index=0  # Assuming 0 is the padding token
-        )
+        losses = []
+        B, T = input_tokens.shape
+
+        # For each timestep t, predict y[:, t] from prefix x[:, :t+1]
+        for t in range(T):
+            m = eq_mask[:, t]                             # (B,)
+            if not m.any():
+                continue
+
+            prefix = input_tokens[:, :t+1]                               # (B, t+1)
+            logits_t, _ = model(prefix)                       # (B, 1, V) 
+
+            # Ensure shape is (B, V)
+            logits_t = logits_t[:, -1, :]                     # (B, V)
+
+            # Cross-entropy only on masked examples at this timestep
+            losses.append(F.cross_entropy(logits_t[m], target_tokens[:, t][m]))
+
+        # eq_mask_flat = eq_mask.view(-1)
+        # logits_flat = logits.view(-1, logits.size(-1))
+        # target_tokens_flat = target_tokens.view(-1)
+
+        # # Compute loss
+        # loss = F.cross_entropy(
+        #     logits_flat[eq_mask_flat], 
+        #     target_tokens_flat[eq_mask_flat]
+        # )
 
         # Backpropagation and optimization step
+        loss = torch.stack(losses).mean()
         loss.backward()
         optimizer.step()
 
@@ -121,24 +140,36 @@ def evaluate_loss(model, loader, device):
     model.eval()
     total_loss = 0
     n_batches = 0
+    
     for batch in tqdm(loader, desc="Evaluating"):
-        batch = batch.to(device)
-        input_tokens = batch[:, :-1]  # Input tokens except the last one
-        target_tokens = batch[:, 1:]       # Target tokens shifted by one
-
-        # Mask the loss before the equal sign 
-        eq_mask = (input_tokens == 12).cumsum(dim=1) > 0
-        eq_mask = eq_mask[:, :-1].view(-1)
+        input_tokens = batch[0].to(device)
+        target_tokens = batch[1].to(device)
 
         # Forward pass
         logits, _ = model(input_tokens)
-        
-        # Compute loss
-        loss = F.cross_entropy(
-            logits.view(-1, logits.size(-1))[eq_mask], 
-            target_tokens.view(-1)[eq_mask], 
-            ignore_index=0  # Assuming 0 is the padding token
-        )
+        # Mask the loss before the equal sign 
+        eq_mask = (input_tokens == 12).cumsum(dim=1) > 0
+        eq_mask &= (target_tokens != -1) # ignore padding
+
+        losses = []
+        B, T = input_tokens.shape
+
+        # For each timestep t, predict y[:, t] from prefix x[:, :t+1]
+        for t in range(T):
+            m = eq_mask[:, t]                             # (B,)
+            if not m.any():
+                continue
+
+            prefix = input_tokens[:, :t+1]                               # (B, t+1)
+            logits_t, _ = model(prefix)                       # (B, 1, V) 
+
+            # Ensure shape is (B, V)
+            logits_t = logits_t[:, -1, :]                     # (B, V)
+
+            # Cross-entropy only on masked examples at this timestep
+            losses.append(F.cross_entropy(logits_t[m], target_tokens[:, t][m]))
+            
+        loss = torch.stack(losses).mean()
 
         total_loss += loss.item()
         n_batches += 1
@@ -372,7 +403,7 @@ def load_config(save_dir, filename):
 
 def load_model(save_dir, filename, model, device):
     filepath = os.path.join(save_dir, filename)
-    checkpoint = torch.load(filepath, map_location=device)
+    checkpoint = torch.load(filepath, map_location=device, weights_only=False)
 
     state_dict = checkpoint["model"]
 
