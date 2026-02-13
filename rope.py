@@ -50,8 +50,7 @@ def apply_rotary_emb(
 
     _, seqlen, _, _ = query.shape
     device = query.device
-    # todo
-    #
+    
     # Please refer to Lecture 5 slides in https://cmu-l3.github.io/anlp-fall2025/static_files/anlp-f2025-05-transformers.pdf
     # and Section 3 in https://arxiv.org/abs/2104.09864.
 
@@ -81,7 +80,7 @@ def apply_rotary_emb(
     k_r = key_real * cos_pos - key_imag * sin_pos 
     k_i = key_imag * cos_pos + key_real * sin_pos
 
-    query_out = torch.stack([q_r, q_i], dim=-1).reshape(query.shape)
-    key_out = torch.stack([k_r, k_i], dim=-1).reshape(key.shape)
+    query_out = torch.stack([q_r, q_i], dim=-1).reshape(query.shape).to(query.dtype)
+    key_out = torch.stack([k_r, k_i], dim=-1).reshape(key.shape).to(key.dtype)
     # Return the rotary position embeddings for the query and key tensors
     return query_out, key_out

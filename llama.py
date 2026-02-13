@@ -42,8 +42,9 @@ class LayerNorm(torch.nn.Module):
             torch.Tensor: The normalized tensor.
         """
         mean = x.mean(dim=-1, keepdim=True)
-        std = x.std(dim=-1, keepdim=True, unbiased=False)
-        return (x - mean) / (std + self.eps)
+        var = ((x - mean) ** 2).mean(dim=-1, keepdim=True)
+        std = torch.sqrt(var + self.eps)
+        return (x - mean) / std
 
     def forward(self, x):
         """
@@ -109,8 +110,8 @@ class Attention(nn.Module):
         bs, n_local_heads, seqlen, head_dim = query.shape
         score = torch.matmul(query, key.transpose(-2, -1))/math.sqrt(head_dim)
         if self.causal:
-            mask = self.causal_mask[:seqlen, :seqlen]
-            score = score.masked_fill(mask == 0, float("-inf"))
+            mask = self.causal_mask[:seqlen, :seqlen].to(device=score.device, dtype=torch.bool)
+            score = score.masked_fill(~mask, -1e9)
         score = F.softmax(score, dim=-1)
         score = self.attn_dropout(score)
         score = torch.matmul(score, value)
@@ -210,7 +211,7 @@ class LlamaLayer(nn.Module):
         https://arxiv.org/pdf/1706.03762.pdf.
 
         The transformer block should consist of:
-        1) layer normalization of the input (via Root Mean Square layer normalization)
+        1) layer normalization of the input 
         2) self-attention on the layer-normalized input
         3) a residual connection (i.e., add the input to the output of the self-attention)
         3) layer normalization on the output of the self-attention
